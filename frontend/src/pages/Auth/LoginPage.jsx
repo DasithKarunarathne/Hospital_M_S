@@ -1,9 +1,10 @@
-import { useEffect } from 'react'
+﻿import { useEffect } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { useNavigate } from 'react-router-dom'
 import apiClient from '../../app/apiClient.js'
+import { getDefaultPathForRole } from '../../app/rolePaths.js'
 import { useAuthStore } from '../../app/store.js'
 import { toastError, toastSuccess } from '../../app/toastHelpers.js'
 
@@ -14,7 +15,7 @@ const schema = z.object({
 
 export default function LoginPage() {
   const navigate = useNavigate()
-  const { token, setToken, setUser } = useAuthStore()
+  const { token, user, setToken, setUser } = useAuthStore()
 
   const {
     register,
@@ -29,22 +30,48 @@ export default function LoginPage() {
   })
 
   useEffect(() => {
-    if (token) {
-      navigate('/records/preview', { replace: true })
+    let isActive = true
+
+    if (token && !user) {
+      apiClient
+        .get('/auth/me', { skipErrorToast: true })
+        .then((response) => {
+          if (isActive) {
+            setUser(response.data.user)
+          }
+        })
+        .catch(() => {})
     }
-  }, [token, navigate])
+
+    return () => {
+      isActive = false
+    }
+  }, [token, user, setUser])
+
+  useEffect(() => {
+    if (token && user) {
+      navigate(getDefaultPathForRole(user.role), { replace: true })
+    }
+  }, [token, user, navigate])
 
   const onSubmit = async (values) => {
     try {
       const { data } = await apiClient.post('/auth/login', values, { skipErrorToast: true })
       setToken(data.token)
       setUser(data.user)
-      toastSuccess('Welcome back!')
-      navigate('/records/preview', { replace: true })
 
-      // refresh user from backend to ensure sync
-      const response = await apiClient.get('/auth/me', { skipErrorToast: true })
-      setUser(response.data.user)
+      let finalUser = data.user
+      try {
+        const response = await apiClient.get('/auth/me', { skipErrorToast: true })
+        finalUser = response.data.user || data.user
+      } catch (fetchError) {
+        // ignore sync failure, keep using login payload
+        console.error('Failed to refresh user profile', fetchError)
+      }
+
+      setUser(finalUser)
+      toastSuccess('Welcome back!')
+      navigate(getDefaultPathForRole(finalUser?.role), { replace: true })
     } catch (error) {
       toastError(error.response?.data?.message || 'Login failed')
     }
@@ -85,7 +112,7 @@ export default function LoginPage() {
         <p style={styles.footer}>
           Need an account?{' '}
           <button type="button" style={styles.linkButton} onClick={() => navigate('/register')}>
-            Register as patient
+            Register
           </button>
         </p>
       </form>

@@ -18,6 +18,11 @@ const userSchema = new Schema(
       enum: ['patient', 'doctor', 'staff', 'manager', 'admin'],
       default: 'patient'
     },
+    linkedPatientId: {
+      type: Schema.Types.ObjectId,
+      ref: 'Patient',
+      default: null
+    },
     profile: {
       firstName: { type: String, trim: true },
       lastName: { type: String, trim: true }
@@ -28,7 +33,5 @@ const userSchema = new Schema(
     versionKey: false
   }
 );
-
-userSchema.index({ email: 1 }, { unique: true });
 
 module.exports = model('User', userSchema);

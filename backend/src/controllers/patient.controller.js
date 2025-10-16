@@ -2,7 +2,7 @@ const asyncHandler = require('../utils/asyncHandler');
 const patientService = require('../services/patients/patient.service');
 
 const getById = asyncHandler(async (req, res) => {
-  const patient = await patientService.getPatient(req.params.id, req.user?.role);
+  const patient = await patientService.getPatient(req.params.id, req.user || {});
   res.status(200).json(patient);
 });
 

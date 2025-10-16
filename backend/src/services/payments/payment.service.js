@@ -6,11 +6,45 @@ const { issueReceipt } = require('./receipt.service');
 const Receipt = require('../../models/Receipt');
 const { badRequest, notFound, conflict, forbidden } = require('../../utils/httpErrors');
 
-async function ensureAppointment(appointmentId) {
+function normalizePatientId(value) {
+  if (!value) {
+    return null;
+  }
+
+  if (typeof value === 'string') {
+    return value;
+  }
+
+  if (typeof value.toString === 'function') {
+    return value.toString();
+  }
+
+  return String(value);
+}
+
+function getLinkedPatientId(actor) {
+  const linkedId = normalizePatientId(actor?.linkedPatientId);
+
+  if (!linkedId) {
+    throw forbidden('Your account is not linked to a patient record');
+  }
+
+  return linkedId;
+}
+
+async function ensureAppointment(appointmentId, actor) {
   const appointment = await Appointment.findById(appointmentId).lean();
 
   if (!appointment) {
     throw notFound('Appointment not found');
+  }
+
+  if (actor?.role === 'patient') {
+    const linkedId = getLinkedPatientId(actor);
+
+    if (normalizePatientId(appointment.patientId) !== linkedId) {
+      throw forbidden('Patients may only manage payments for their own appointments');
+    }
   }
 
   return appointment;
@@ -19,7 +53,7 @@ async function ensureAppointment(appointmentId) {
 async function createPayment(payload, actor) {
   const { method, amount, appointmentId, details = {} } = payload;
 
-  await ensureAppointment(appointmentId);
+  await ensureAppointment(appointmentId, actor);
 
   switch (method) {
     case 'INSURANCE': {
@@ -120,17 +154,19 @@ async function handleWebhook(payload) {
   return payment.toObject();
 }
 
-async function getReceipt(paymentId) {
+async function getReceipt(paymentId, actor) {
   const receipt = await Receipt.findOne({ paymentId }).lean();
-
-  if (receipt) {
-    return receipt;
-  }
 
   const payment = await Payment.findById(paymentId).lean();
 
   if (!payment) {
     throw notFound('Payment not found');
+  }
+
+  await ensureAppointment(payment.appointmentId, actor);
+
+  if (receipt) {
+    return receipt;
   }
 
   if (payment.status !== 'SUCCESS') {

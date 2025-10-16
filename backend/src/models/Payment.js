@@ -25,6 +25,4 @@ const paymentSchema = new Schema(
   }
 );
 
-paymentSchema.index({ intentId: 1 }, { unique: true, sparse: true });
-
 module.exports = model('Payment', paymentSchema);

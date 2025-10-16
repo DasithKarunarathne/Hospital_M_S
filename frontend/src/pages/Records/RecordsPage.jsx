@@ -1,13 +1,23 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
-import { useParams } from 'react-router-dom'
+﻿import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useNavigate, useParams } from 'react-router-dom'
 import apiClient from '../../app/apiClient.js'
-import ErrorBanner from '../../components/ErrorBanner.jsx'
+import { useAuthStore } from '../../app/store.js'
 import EmptyState from '../../components/EmptyState.jsx'
-import RecordEditForm from './RecordEditForm.jsx'
-import ChangeLogPanel from './ChangeLogPanel.jsx'
+import DoctorRecordsScreen from './DoctorRecordsScreen.jsx'
+import StaffRecordsScreen from './StaffRecordsScreen.jsx'
+import PatientRecordsScreen from './PatientRecordsScreen.jsx'
+import { layout } from './recordStyles.js'
+
+const ROLE_SCREENS = {
+  doctor: DoctorRecordsScreen,
+  staff: StaffRecordsScreen,
+  patient: PatientRecordsScreen
+}
 
 export default function RecordsPage() {
   const { id } = useParams()
+  const navigate = useNavigate()
+  const { user, token } = useAuthStore()
   const [patient, setPatient] = useState(null)
   const [auditEntries, setAuditEntries] = useState([])
   const [loading, setLoading] = useState(false)
@@ -56,6 +66,20 @@ export default function RecordsPage() {
     loadPatient()
   }, [loadPatient])
 
+  useEffect(() => {
+    if (user?.role === 'patient' && id === 'preview' && user.linkedPatientId) {
+      navigate(`/records/${user.linkedPatientId}`, { replace: true })
+    }
+  }, [user, id, navigate])
+
+  const handleUpdatedPatient = useCallback(
+    (next) => {
+      setPatient(next)
+      loadAudit()
+    },
+    [loadAudit]
+  )
+
   const pageState = useMemo(() => {
     if (!id || id === 'preview') {
       return 'empty'
@@ -76,6 +100,35 @@ export default function RecordsPage() {
     return 'ready'
   }, [id, loading, error, patient])
 
+  if (!user) {
+    if (!token) {
+      return (
+        <main style={layout}>
+          <EmptyState title="Access restricted" message="Please sign in to view patient records." />
+        </main>
+      )
+    }
+
+    return (
+      <main style={layout}>
+        <p>Loading your account...</p>
+      </main>
+    )
+  }
+
+  const ScreenComponent = ROLE_SCREENS[user.role]
+
+  if (!ScreenComponent) {
+    return (
+      <main style={layout}>
+        <EmptyState
+          title="Access restricted"
+          message="Your role is not permitted to view patient records."
+        />
+      </main>
+    )
+  }
+
   if (pageState === 'empty') {
     return (
       <main style={layout}>
@@ -88,73 +141,14 @@ export default function RecordsPage() {
   }
 
   return (
-    <main style={layout}>
-      {error ? <ErrorBanner message={error} onRetry={loadPatient} /> : null}
-      <div style={grid}>
-        <section style={card}>
-          <header style={cardHeader}>
-            <div>
-              <h2 style={cardTitle}>
-                {patient?.demographics?.firstName} {patient?.demographics?.lastName}
-              </h2>
-              <p style={cardSubtitle}>Patient profile & insurance</p>
-            </div>
-          </header>
-          <RecordEditForm
-            patient={patient}
-            loading={loading}
-            onUpdated={(next) => {
-              setPatient(next)
-              loadAudit()
-            }}
-          />
-        </section>
-        <aside style={card}>
-          <header style={cardHeader}>
-            <div>
-              <h3 style={cardTitle}>Change log</h3>
-              <p style={cardSubtitle}>Recent updates and corrections</p>
-            </div>
-          </header>
-          <ChangeLogPanel entries={auditEntries} loading={loading} />
-        </aside>
-      </div>
-    </main>
+    <ScreenComponent
+      layoutStyle={layout}
+      patient={patient}
+      auditEntries={auditEntries}
+      loading={loading}
+      error={error}
+      onRetry={loadPatient}
+      onPatientUpdated={handleUpdatedPatient}
+    />
   )
-}
-
-const layout = {
-  padding: '2rem',
-  maxWidth: '1200px',
-  margin: '0 auto',
-  display: 'flex',
-  flexDirection: 'column',
-  gap: '1.5rem'
-}
-
-const grid = {
-  display: 'grid',
-  gridTemplateColumns: '2fr 1fr',
-  gap: '1.5rem'
-}
-
-const card = {
-  background: '#fff',
-  borderRadius: '1rem',
-  padding: '1.5rem',
-  boxShadow: '0 20px 40px rgba(15, 23, 42, 0.08)',
-  minHeight: '320px'
-}
-
-const cardHeader = {
-  marginBottom: '1.5rem'
-}
-
-const cardTitle = {
-  margin: 0
-}
-
-const cardSubtitle = {
-  margin: 0,
-  color: '#64748b'
 }

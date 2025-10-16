@@ -20,7 +20,7 @@ const handleWebhook = asyncHandler(async (req, res) => {
 });
 
 const getReceipt = asyncHandler(async (req, res) => {
-  const receipt = await paymentService.getReceipt(req.params.id);
+  const receipt = await paymentService.getReceipt(req.params.id, req.user || {});
   res.status(200).json(receipt);
 });
 

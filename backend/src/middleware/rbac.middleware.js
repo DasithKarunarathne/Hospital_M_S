@@ -1,4 +1,4 @@
-function rbac(...allowedRoles) {
+function requireRole(...allowedRoles) {
   return (req, res, next) => {
     if (!req.user) {
       res.status(401).json({
@@ -8,7 +8,7 @@ function rbac(...allowedRoles) {
       return;
     }
 
-    if (!allowedRoles.includes(req.user.role)) {
+    if (allowedRoles.length && !allowedRoles.includes(req.user.role)) {
       res.status(403).json({
         code: 'FORBIDDEN',
         message: 'You do not have permission to perform this action'
@@ -20,4 +20,4 @@ function rbac(...allowedRoles) {
   };
 }
 
-module.exports = rbac;
+module.exports = { requireRole };

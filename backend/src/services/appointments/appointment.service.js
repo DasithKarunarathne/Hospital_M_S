@@ -2,7 +2,7 @@ const Appointment = require('../../models/Appointment');
 const AuditEntry = require('../../models/AuditEntry');
 const { isSlotAvailable } = require('./availability.service');
 const { canCancel, canReschedule } = require('./policy.service');
-const { conflict, notFound, badRequest } = require('../../utils/httpErrors');
+const { conflict, notFound, badRequest, forbidden } = require('../../utils/httpErrors');
 
 async function logAudit(entityId, actorId, action, diff = []) {
   await AuditEntry.create({
@@ -24,8 +24,47 @@ function ensureDate(value, field) {
   return date;
 }
 
-async function book(payload, actorId) {
-  const { patientId, doctorId, reason } = payload;
+function normalizePatientId(value) {
+  if (!value) {
+    return null;
+  }
+
+  if (typeof value === 'string') {
+    return value;
+  }
+
+  if (typeof value.toString === 'function') {
+    return value.toString();
+  }
+
+  return String(value);
+}
+
+function getLinkedPatientId(actor) {
+  const linkedId = normalizePatientId(actor?.linkedPatientId);
+
+  if (!linkedId) {
+    throw forbidden('Your account is not linked to a patient record');
+  }
+
+  return linkedId;
+}
+
+function assertAppointmentOwnership(appointment, actor) {
+  if (!actor || actor.role !== 'patient') {
+    return;
+  }
+
+  const linkedId = getLinkedPatientId(actor);
+
+  if (normalizePatientId(appointment.patientId) !== linkedId) {
+    throw forbidden('Patients may only manage their own appointments');
+  }
+}
+
+async function book(payload, actor = {}) {
+  const { doctorId, reason } = payload;
+  const actorId = actor?.id;
   const startsAt = ensureDate(payload.startsAt, 'startsAt');
   const endsAt = ensureDate(payload.endsAt, 'endsAt');
 
@@ -35,9 +74,25 @@ async function book(payload, actorId) {
     throw conflict('Selected time slot is no longer available');
   }
 
+  let targetPatientId = payload.patientId;
+
+  if (actor.role === 'patient') {
+    const linkedId = getLinkedPatientId(actor);
+
+    if (targetPatientId && normalizePatientId(targetPatientId) !== linkedId) {
+      throw forbidden('Patients can only book appointments for themselves');
+    }
+
+    targetPatientId = linkedId;
+  }
+
+  if (!targetPatientId) {
+    throw badRequest('patientId is required to book an appointment');
+  }
+
   try {
     const appointment = await Appointment.create({
-      patientId,
+      patientId: targetPatientId,
       doctorId,
       department: payload.department,
       startsAt,
@@ -61,12 +116,14 @@ async function book(payload, actorId) {
   }
 }
 
-async function cancel(id, actorId) {
+async function cancel(id, actor = {}) {
   const appointment = await Appointment.findById(id);
 
   if (!appointment) {
     throw notFound('Appointment not found');
   }
+
+  assertAppointmentOwnership(appointment, actor);
 
   const policy = canCancel(appointment, new Date());
 
@@ -76,23 +133,25 @@ async function cancel(id, actorId) {
 
   const previousStatus = appointment.status;
   appointment.status = 'CANCELLED';
-  appointment.updatedBy = actorId;
+  appointment.updatedBy = actor?.id;
 
   await appointment.save();
 
-  await logAudit(appointment._id, actorId, 'cancelled', [
+  await logAudit(appointment._id, actor?.id, 'cancelled', [
     { path: 'status', before: previousStatus, after: appointment.status }
   ]);
 
   return appointment.toObject();
 }
 
-async function reschedule(id, newSlot, actorId) {
+async function reschedule(id, newSlot, actor = {}) {
   const appointment = await Appointment.findById(id);
 
   if (!appointment) {
     throw notFound('Appointment not found');
   }
+
+  assertAppointmentOwnership(appointment, actor);
 
   const policy = canReschedule(appointment, newSlot, new Date());
 
@@ -118,11 +177,11 @@ async function reschedule(id, newSlot, actorId) {
   appointment.startsAt = startsAt;
   appointment.endsAt = endsAt;
   appointment.status = 'RESCHEDULED';
-  appointment.updatedBy = actorId;
+  appointment.updatedBy = actor?.id;
 
   await appointment.save();
 
-  await logAudit(appointment._id, actorId, 'rescheduled', [
+  await logAudit(appointment._id, actor?.id, 'rescheduled', [
     { path: 'startsAt', before: previous.startsAt, after: appointment.startsAt },
     { path: 'endsAt', before: previous.endsAt, after: appointment.endsAt },
     { path: 'status', before: previous.status, after: appointment.status }
@@ -131,10 +190,16 @@ async function reschedule(id, newSlot, actorId) {
   return appointment.toObject();
 }
 
-async function listUpcoming(limit = 20) {
-  return Appointment.find({
+async function listUpcoming(limit = 20, actor = {}) {
+  const query = {
     startsAt: { $gte: new Date() }
-  })
+  };
+
+  if (actor.role === 'patient') {
+    query.patientId = getLinkedPatientId(actor);
+  }
+
+  return Appointment.find(query)
     .sort({ startsAt: 1 })
     .limit(limit)
     .lean();

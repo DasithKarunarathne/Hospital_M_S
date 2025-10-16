@@ -4,10 +4,10 @@ import { useAuthStore } from '../app/store'
 import apiClient from '../app/apiClient'
 
 const navItems = [
-  { to: '/records/preview', label: 'Records' },
-  { to: '/appointments', label: 'Appointments' },
-  { to: '/payments/demo', label: 'Payments' },
-  { to: '/reports', label: 'Reports' }
+  { to: '/records/preview', label: 'Records', roles: ['doctor', 'staff', 'patient'] },
+  { to: '/appointments', label: 'Appointments', roles: ['doctor', 'staff', 'patient'] },
+  { to: '/payments/demo', label: 'Payments', roles: ['staff', 'patient', 'manager', 'admin'] },
+  { to: '/reports', label: 'Reports', roles: ['doctor', 'staff', 'manager', 'admin'] }
 ]
 
 export default function Layout() {
@@ -35,19 +35,26 @@ export default function Layout() {
           <strong style={styles.brand}>HospitalMS</strong>
         </div>
         <nav style={styles.nav}>
-          {navItems.map((item) => (
-            <NavLink
-              key={item.to}
-              to={item.to}
-              style={({ isActive }) => ({
-                ...styles.link,
-                backgroundColor: isActive ? '#0ea5e9' : 'transparent',
-                color: isActive ? '#fff' : '#0f172a'
-              })}
-            >
-              {item.label}
-            </NavLink>
-          ))}
+          {navItems
+            .filter((item) => {
+              if (!item.roles || item.roles.length === 0) {
+                return true
+              }
+              return user?.role ? item.roles.includes(user.role) : false
+            })
+            .map((item) => (
+              <NavLink
+                key={item.to}
+                to={item.to}
+                style={({ isActive }) => ({
+                  ...styles.link,
+                  backgroundColor: isActive ? '#0ea5e9' : 'transparent',
+                  color: isActive ? '#fff' : '#0f172a'
+                })}
+              >
+                {item.label}
+              </NavLink>
+            ))}
         </nav>
         <div style={styles.userSection}>
           {user ? (
@@ -68,7 +75,7 @@ export default function Layout() {
       <main style={styles.content}>
         <Outlet />
       </main>
-      <footer style={styles.footer}>HospitalMS Internal · For training use only</footer>
+      <footer style={styles.footer}>HospitalMS Internal - For training use only</footer>
     </div>
   )
 }

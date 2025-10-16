@@ -22,7 +22,8 @@ function decodeToken(token) {
   return {
     userId: payload.sub,
     email: payload.email,
-    role: payload.role
+    role: payload.role,
+    linkedPatientId: payload.linkedPatientId || null
   };
 }
 
@@ -36,7 +37,12 @@ function requireAuth(req, res, next) {
 
   try {
     req.auth = decodeToken(token);
-    req.user = { id: req.auth.userId, role: req.auth.role, email: req.auth.email };
+    req.user = {
+      id: req.auth.userId,
+      role: req.auth.role,
+      email: req.auth.email,
+      linkedPatientId: req.auth.linkedPatientId
+    };
     next();
   } catch (error) {
     buildUnauthorizedResponse(res, 'Invalid or expired token');
@@ -52,7 +58,12 @@ function optionalAuth(req, res, next) {
 
   try {
     req.auth = decodeToken(token);
-    req.user = { id: req.auth.userId, role: req.auth.role, email: req.auth.email };
+    req.user = {
+      id: req.auth.userId,
+      role: req.auth.role,
+      email: req.auth.email,
+      linkedPatientId: req.auth.linkedPatientId
+    };
   } catch (error) {
     // ignore invalid token for optional auth
   }
@@ -77,6 +88,7 @@ async function attachUser(req, res, next) {
       id: user._id.toString(),
       email: user.email,
       role: user.role,
+      linkedPatientId: user.linkedPatientId ? user.linkedPatientId.toString() : null,
       profile: user.profile
     };
 

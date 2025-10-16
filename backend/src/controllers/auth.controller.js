@@ -27,16 +27,20 @@ function toUserResponse(user) {
     id: user.id,
     email: user.email,
     role: user.role,
+    linkedPatientId: user.linkedPatientId ? user.linkedPatientId.toString() : null,
     profile: user.profile
   };
 }
 
 function signToken(user) {
+  const linkedPatientId = user.linkedPatientId ? user.linkedPatientId.toString() : undefined;
+
   return jwt.sign(
     {
       sub: user.id,
       email: user.email,
-      role: user.role
+      role: user.role,
+      linkedPatientId
     },
     env.JWT_SECRET,
     {

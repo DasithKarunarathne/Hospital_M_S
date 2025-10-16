@@ -4,7 +4,7 @@ const AuditEntry = require('../../models/AuditEntry');
 const { validatePatientUpdate } = require('./validation.service');
 const { validatePolicy } = require('./insurance.mock');
 const { jsonDiff } = require('../../utils/diff');
-const { conflict, notFound, badRequest } = require('../../utils/httpErrors');
+const { conflict, notFound, badRequest, forbidden } = require('../../utils/httpErrors');
 
 function maskSensitiveDetails(patient) {
   if (!patient) {
@@ -38,12 +38,42 @@ function ensureValidId(id) {
   }
 }
 
-async function getPatient(id, role) {
+function normalizeId(value) {
+  if (!value) {
+    return null;
+  }
+
+  if (typeof value === 'string') {
+    return value;
+  }
+
+  if (typeof value.toString === 'function') {
+    return value.toString();
+  }
+
+  return String(value);
+}
+
+async function getPatient(id, requester = {}) {
   ensureValidId(id);
   const patient = await Patient.findById(id).lean();
 
   if (!patient) {
     throw notFound('Patient not found');
+  }
+
+  const role = requester?.role;
+  const linkedPatientId = normalizeId(requester?.linkedPatientId);
+  const requestedId = normalizeId(id);
+
+  if (role === 'patient') {
+    if (!linkedPatientId) {
+      throw forbidden('Your account is not linked to a patient record');
+    }
+
+    if (linkedPatientId !== requestedId) {
+      throw forbidden('Patients may only access their own record');
+    }
   }
 
   if (role !== 'doctor' && role !== 'staff') {

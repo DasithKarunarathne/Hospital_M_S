@@ -5,11 +5,19 @@ import { useNavigate } from 'react-router-dom'
 import apiClient from '../../app/apiClient.js'
 import { toastError, toastSuccess } from '../../app/toastHelpers.js'
 
+const ROLE_OPTIONS = [
+  { value: 'patient', label: 'Patient' },
+  { value: 'doctor', label: 'Doctor' },
+  { value: 'staff', label: 'Staff' },
+  { value: 'manager', label: 'Manager' }
+]
+
 const schema = z
   .object({
     email: z.string().trim().email(),
     password: z.string().min(8, 'Password must be at least 8 characters'),
-    confirmPassword: z.string().min(8)
+    confirmPassword: z.string().min(8),
+    role: z.enum(['patient', 'doctor', 'staff', 'manager'])
   })
   .refine((data) => data.password === data.confirmPassword, {
     message: 'Passwords must match',
@@ -28,7 +36,8 @@ export default function RegisterPage() {
     defaultValues: {
       email: '',
       password: '',
-      confirmPassword: ''
+      confirmPassword: '',
+      role: 'patient'
     }
   })
 
@@ -38,7 +47,8 @@ export default function RegisterPage() {
         '/auth/register',
         {
           email: values.email,
-          password: values.password
+          password: values.password,
+          role: values.role
         },
         { skipErrorToast: true }
       )
@@ -52,8 +62,8 @@ export default function RegisterPage() {
   return (
     <div style={styles.wrapper}>
       <form style={styles.card} onSubmit={handleSubmit(onSubmit)}>
-        <h1 style={styles.title}>Create patient account</h1>
-        <p style={styles.subtitle}>For patients requesting access to their records.</p>
+        <h1 style={styles.title}>Create account</h1>
+        <p style={styles.subtitle}>Choose your role to request the right level of access.</p>
 
         <label style={styles.label}>
           Email
@@ -75,6 +85,18 @@ export default function RegisterPage() {
             {...register('password')}
           />
           {errors.password ? <span style={styles.error}>{errors.password.message}</span> : null}
+        </label>
+
+        <label style={styles.label}>
+          Role
+          <select style={styles.input} {...register('role')}>
+            {ROLE_OPTIONS.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+          {errors.role ? <span style={styles.error}>{errors.role.message}</span> : null}
         </label>
 
         <label style={styles.label}>

@@ -9,6 +9,7 @@ import Unauthorized from '../pages/Misc/Unauthorized.jsx'
 import NotFound from '../pages/Misc/NotFound.jsx'
 import Layout from '../components/Layout.jsx'
 import ProtectedRoute from './ProtectedRoute.jsx'
+import RoleLandingRedirect from './RoleLandingRedirect.jsx'
 import { Toasts } from './toasts.jsx'
 
 export default function AppRoutes() {
@@ -20,12 +21,24 @@ export default function AppRoutes() {
 
         <Route element={<Layout />}>
           <Route element={<ProtectedRoute />}>
-            <Route index element={<Navigate to="/records/preview" replace />} />
-            <Route path="records/:id" element={<RecordsPage />} />
-            <Route path="appointments" element={<AppointmentsPage />} />
-            <Route path="payments" element={<Navigate to="/payments/demo" replace />} />
-            <Route path="payments/:id" element={<PaymentsPage />} />
-            <Route path="reports" element={<ReportsPage />} />
+            <Route index element={<RoleLandingRedirect />} />
+
+            <Route element={<ProtectedRoute allowedRoles={['doctor', 'staff', 'patient']} />}>
+              <Route path="records/:id" element={<RecordsPage />} />
+            </Route>
+
+            <Route element={<ProtectedRoute allowedRoles={['doctor', 'staff', 'patient']} />}>
+              <Route path="appointments" element={<AppointmentsPage />} />
+            </Route>
+
+            <Route element={<ProtectedRoute allowedRoles={['staff', 'patient', 'manager', 'admin']} />}>
+              <Route path="payments" element={<Navigate to="/payments/demo" replace />} />
+              <Route path="payments/:id" element={<PaymentsPage />} />
+            </Route>
+
+            <Route element={<ProtectedRoute allowedRoles={['doctor', 'staff', 'manager', 'admin']} />}>
+              <Route path="reports" element={<ReportsPage />} />
+            </Route>
           </Route>
 
           <Route path="unauthorized" element={<Unauthorized />} />
